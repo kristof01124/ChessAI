@@ -24,6 +24,7 @@ class Board:
         self.findKings()
         self.dangerMap = [[0 for i in range(0,8)] for i in range(0,8)]
         self.checks = 0
+        self.possibleMoves = []
 
     def findKings(self):
         pass
@@ -39,58 +40,85 @@ class Board:
     def reverseMove(self, move):
         pass
 
-    #getting possbible moves
-
-    def getPossibleMoves(self, white = True):
-        pass
-
-    def getBishopMoves(self, poz):
-        pass
-
-    def getRookMoves(self, poz):
-        pass
-
-    def getPawnMoves(self, poz):
-        pass
-
-    def getKingMoves(self, poz):
-        pass
-
-    def getQueenMoves(self, poz):
-        pass
-
-    def getEnPassantMoves(self):
-        pass
-
-    def getCastleMoves(self):
-        pass
-
     #get moves when pinned
-
     def getBishopMovesPinned(self, poz, dir):
-        pass
+        if abs(poz[0]) + abs[poz[1]] != 2:
+            return
+        self.handleDirection(poz, dir)
+        self.handleDirection(poz, [-dir[0], -dir[1]])
+
+    def handleDirection(self, poz, dir):
+        #TODO: when king is in check special case to only move to squares labeld with 2 on the dangermap
+        #TODO:
+        i = poz[0]
+        j = poz[1]
+        while True:
+            i += dir[0]
+            j += dir[1]
+            if (not self.inside([i, j])):
+                return
+            if self.board[i][j] == 0:
+                self.possibleMoves.append([poz, [i, j]])
+                continue
+            if self.withMe([i, j]):
+                self.possibleMoves.append([poz, [i, j]])
+            return
+
+
 
     def getRookMovesPinned(self, poz, dir):
-        pass
+        #TODO: not pinned case
+        if abs(dir[0]) + abs(dir[1]) != 1:
+            return
+        self.handleDirection(poz, dir)
+        self.handleDirection(poz, [-dir[0], -dir[1]])
 
     def getPawnMovesPinned(self, poz, dir):
-        pass
+        #TODO: not pinned case
+        if self.white:
+            dir = [abs(dir[0]), abs(dir[1])]
+        else:
+            dire = [-abs(dir[0]), -abs(dir[1])]
+        match abs(dir[0]) + abs(dir[1]):
+            case 1:
+                if self.board[poz[0]][poz[1]] == 0:
+                    self.possibleMoves.append([poz, [poz[0] + dir[0], poz[1] + dir[1]]])
+                    return
+            case 2:
+                if not self.withMe([poz[0] + dir[0], poz[1] + dir[1]]):
+                    self.possibleMoves.append([poz, [poz[0] + dir[0], poz[1] + dir[1]]])
+                return
 
-    def getKingMovesPinned(self, poz, dir):
-        pass
+    def getKingMoves(self, poz):
+        for i in range(poz[0] -1, poz[0] + 2):
+            for j in range(poz[0] -1, poz[0] + 2):
+                if abs(i) + abs(j) == 0:
+                    continue
+                if self.board[i][j] == 0 and self.dangerMap[i][j] == 0:
+                    self.possibleMoves.append([poz, [i, j]])
+
 
     def getQueenMovesPinned(self, poz, dir):
-        pass
+        if abs(dir[0]) + abs(dir[1]) != 1:
+            return
+        self.handleDirection(poz, dir)
+        self.handleDirection(poz, [-dir[0], -dir[1]])
 
     def getEnPassantMovesPinned(self, dir):
         pass
 
+    def getKnightMovesPinned(self, dir):
+        return
+
     # danger map creationn
+
+    def withMe(self, poz):
+        return self.board[poz[0]][poz[1]] > 0 and self.white or self.board[poz[0]][poz[1]] < 0 and not self.white
 
     def createDangerMap(self):
         for i in range(0,8):
             for j in range(0,8):
-                if self.white and self.board[i][j] < 0 or not self.white and self.board[i][j] > 0:
+                if not self.withMe([i, j]):
                     match abs(self.board[i][j]):
                         case Pieces.PAWN:
                             self.dangerMapPawn([i, j])
@@ -109,12 +137,12 @@ class Board:
         return poz[0] < 8 and poz[0] >= 0 and poz[1] < 8 and poz[1] >= 0
 
     def handlePinnedPiece(self, poz, dir):
-        pass
+        self.board[poz[0]][poz[1]] += 10
 
     def dangerMapAddSquare(self, poz):
         if self.inside([poz[0] , poz[1]]):
             self.dangerMap[poz[0]][poz[1]] = max(1, self.dangerMap[poz[0]][poz[1]])
-        if self.board[poz[0]][poz[1]] == Pieces.KING and self.white or self.board[poz[0]][poz[1]] == -Pieces.KING and not self.white:
+        if self.withMe(poz) and abs(self.board[poz[0]][poz[1]]) == Pieces.KING:
             self.checks += 1
 
     def dangerMapHandleDirection(self, poz, dir):
@@ -133,7 +161,7 @@ class Board:
                     self.dangerMap[poz[0]][poz[1]] = 1
                     continue
                 # if we found the king
-                if self.board[poz[0]][poz[1]] == Pieces.KING and self.white or self.board[poz[0]][poz[1]] == -Pieces.KING and not self.white:
+                if self.withMe(poz) and abs(self.board[poz[0]][poz[1]]) == Pieces.KING:
                     temp = poz.copy()
                     self.dangerMap[poz[0]][poz[1]] = max(1, self.dangerMap[poz[0]][poz[1]])
                     poz[0] += i
@@ -152,16 +180,15 @@ class Board:
                         poz[1] -= j
                     break
                 # if we find a friencly piece
-                if self.board[poz[0]][poz[1]] > 0 and self.white or self.board[poz[0]][poz[1]] < 0 and not self.white:
-                    foundEnemyPiece = poz
+                if self.withMe(poz):
+                    foundEnemyPiece = poz.copy()
                     continue
                 # if we find an enemy piece
                 self.dangerMap[poz[0]][poz[1]] = max(1, self.board[poz[0]][poz[1]])
                 break
             else:
-                if self.board[poz[0]][poz[1]] == Pieces.KING and self.white or self.board[poz[0]][
-                    poz[1]] == -Pieces.KING and not self.white:
-                    self.handlePinnedPiece(poz, [i, j])
+                if self.withMe(poz) and abs(self.board[poz[0]][poz[1]]) == Pieces.KING:
+                    self.handlePinnedPiece(foundEnemyPiece, [i, j])
                     break
                 if self.board[poz[0]][poz[1]] != 0:
                     break

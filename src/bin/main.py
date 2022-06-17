@@ -6,8 +6,8 @@ import timeit
 def main():
     board = [
         [0, 0, Board.Pieces.KING, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, - Board.Pieces.PAWN, 0],
         [0, 0, 0, 0, 0, 0, 0, 0],
-        [- Board.Pieces.BISHOP, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0],
@@ -17,6 +17,9 @@ def main():
     b = Board.Board(board)
     b.createDangerMap()
     for i in b.dangerMap:
+        print(i)
+    print("--------------------------")
+    for i in b.board:
         print(i)
     print(b.checks)
 
