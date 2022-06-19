@@ -3,24 +3,18 @@ import  src.includes.Chess.Move as Move
 
 import timeit
 
+starting_position = [
+    [Board.Pieces.ROOK, Board.Pieces.KNIGHT, Board.Pieces.BISHOP, Board.Pieces.KING, Board.Pieces.QUEEN, Board.Pieces.BISHOP, Board.Pieces.KNIGHT, Board.Pieces.ROOK ],
+    [Board.Pieces.BISHOP, Board.Pieces.PAWN,   Board.Pieces.PAWN,   Board.Pieces.PAWN, Board.Pieces.PAWN,  Board.Pieces.PAWN,   Board.Pieces.PAWN,   Board.Pieces.PAWN],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [-Board.Pieces.PAWN, -Board.Pieces.PAWN,   -Board.Pieces.PAWN,   -Board.Pieces.PAWN, -Board.Pieces.PAWN,  -Board.Pieces.PAWN,   -Board.Pieces.PAWN,   -Board.Pieces.PAWN],
+    [-Board.Pieces.ROOK, -Board.Pieces.KNIGHT, -Board.Pieces.BISHOP, -Board.Pieces.QUEEN, -Board.Pieces.KING, -Board.Pieces.BISHOP, -Board.Pieces.KNIGHT, -Board.Pieces.ROOK ]
+]
+
 def main():
-    board = [
-        [0, 0, Board.Pieces.KING, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, - Board.Pieces.PAWN, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, - Board.Pieces.QUEEN, 0, 0, 0, 0, 0]
-    ]
-    b = Board.Board(board)
-    b.createDangerMap()
-    for i in b.dangerMap:
-        print(i)
-    print("--------------------------")
-    for i in b.board:
-        print(i)
-    print(b.checks)
+    print(Board.Inside.inside)
 
 main()
