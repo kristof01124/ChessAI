@@ -71,6 +71,7 @@ class Board:
         self.testing = [0, 0, 0, 0, 0, 0, 0]
 
     #public
+
     def makeMove(self, mv): #doesn't check for validity of move
         if mv == [26, 17]:
             i = 0
@@ -177,7 +178,6 @@ class Board:
             return
         #handle en passant
         if temp[len(temp) - 1] is True:
-            raise "This shouldnt happen"
             if frm % 8 > to % 8:
                 capture = frm - 1
             else:
@@ -190,44 +190,12 @@ class Board:
         self.state[to] = capture
         self.__castling = castling
 
-    def __validateMoves(self):
-        if self.__checks == 0:
-            return
-        if self.__checks == 1:
-            index = len(self.__possibleMoves) -1
-            temp = None
-            i = 0
-            while i <= index:
-                if self.__dangerMap[self.__possibleMoves[i][1]] != 2 and abs(self.state[self.__possibleMoves[i][0]]) != Pieces.KING:
-                    temp = copy.copy(self.__possibleMoves[i])
-                    self.__possibleMoves[i] = self.__possibleMoves[index]
-                    self.__possibleMoves[index] = temp
-                    index -= 1
-                    i -= 1
-                i += 1
-            self.__possibleMoves = self.__possibleMoves[0:index + 1]
-            return
-        index = len(self.__possibleMoves) - 1
-        temp = None
-        i = 0
-        while i <= index:
-            if abs(self.state[self.__possibleMoves[i][0]]) != Pieces.KING:
-                temp = copy.copy(self.__possibleMoves[i])
-                self.__possibleMoves[i] = self.__possibleMoves[index]
-                self.__possibleMoves[index] = temp
-                index -= 1
-                i -= 1
-            i += 1
-        self.__possibleMoves = self.__possibleMoves[0:index + 1]
-        #TODO: checck en passant, but super fuckin rare case
-
-
-
-
+    # ----------------------  POSSIBLE MOVE GENERATION ------------------------------------------------------
     def getAllPossibleMoves(self):
         self.__possibleMoves.clear()
         self.__dangerMap = [0 for i in range(0, 64)]
-        self.generateDangerMap()
+        self.generateDangerMap() # assume to be good for now
+        self.__getEnPassantMoves() # need to be before the for range, beacuse of pins
         for i in range(0, 64):
             if self.withMe(i):
                 match abs(self.state[i]):
@@ -245,18 +213,15 @@ class Board:
                         self.__getPossiblePawnMoves(i)
             if abs(self.state[i]) >= 10:
                 self.state[i] /= 10
-
-        self.__getEnPassantMoves()
-        self.__getCastleMoves()
         self.__validateMoves()
-
+        #these don't need validation
+        self.__getCastleMoves()
     #private
 
     def __getPossibleKingMoves(self, poz):
         for j in Moves.King:
-            if Inside.inside[poz][j[0]][j[1]] and self.__dangerMap[poz + Directions.directions[j[0]][j[1]]] == 0 and not self.withMe(poz + Directions.directions[j[0]][j[1]]):
+            if Inside.inside[poz][j[0]][j[1]] and self.__dangerMap[poz + Directions.directions[j[0]][j[1]]] == 0:
                 self.__possibleMoves.append([poz, poz + Directions.directions[j[0]][j[1]]])
-
 
     def __getPossibleKnightMoves(self, poz):
         for i in range(0, 8):
@@ -275,6 +240,15 @@ class Board:
         for dir in Moves.Rook:
             self.__addSlideToPossibleMoves(poz, dir)
 
+    def __addSlideToPossibleMoves(self, poz : int, dir):
+        move = Directions.directions[dir[0]][dir[1]]
+        basePoz = copy.copy(poz)
+        while Inside.inside[poz][dir[0]][dir[1]]:
+            poz += move
+            if self.withMe(poz):
+                return
+            self.__possibleMoves.append([basePoz, poz])
+
     def __getPossiblePawnMoves(self, poz):
         if self.white:
             capture = Moves.WhitePawnCapture
@@ -282,17 +256,19 @@ class Board:
         else:
             capture = Moves.BlackPawnCapture
             advance = Moves.BlackPawnAdvance
+        #handle captures
         for i in capture:
-            if Inside.inside[poz][i[0]][i[1]] and self.withEnemey(poz + Directions.directions[i[0]][i[1]]):
-                self.__possibleMoves.append([poz, poz + Directions.directions[i[0]][i[1]]])
-        if Inside.inside[poz][advance[0]][advance[1]] and self.state[poz + Directions.directions[advance[0]][advance[1]]] == 0:
-            self.__possibleMoves.append([poz, poz + Directions.directions[advance[0]][advance[1]]])
-            if self.white and poz < 16 or not self.white and poz >= 48 and \
-                    Inside.inside[poz + Directions.directions[advance[0]][advance[1]]][advance[0]][advance[1]] and \
-                self.state[poz + Directions.directions[advance[0]][advance[1]] + Directions.directions[advance[0]][advance[1]]] == 0:
-                self.__possibleMoves.append([poz, poz + Directions.directions[advance[0]][advance[1]] + Directions.directions[advance[0]][advance[1]]])
-
-
+            move = Directions.directions[i[0]][i[1]]
+            if Inside.inside[poz][i[0]][i[1]] and self.withEnemey(poz + move):
+                self.__possibleMoves.append([poz, poz + move])
+        #handle advance
+        move = Directions.directions[advance[0]][advance[1]]
+        if Inside.inside[poz][advance[0]][advance[1]] and self.state[poz + move] == 0:
+            self.__possibleMoves.append([poz, poz + move])
+            #handle duble advance
+            if Inside.inside[poz + move][advance[0]][advance[1]] and self.state[poz + 2*move] == 0 and \
+                    poz < 16 and self.white or poz >= 48 and not self.white:
+                self.__possibleMoves.append([poz, poz + 2*move])
 
     def __getCastleMoves(self):
         found = False
@@ -325,7 +301,6 @@ class Board:
                 if not found:
                     self.__possibleMoves.append([60, 62])
 
-
     def __getEnPassantMoves(self):
         if len(self.__moveHistory) == 0:
             return
@@ -340,34 +315,38 @@ class Board:
             if Inside.inside[poz][1][j] and self.withMe(poz + Directions.directions[1][j]) and abs(self.state[poz + Directions.directions[1][j]]) == Pieces.PAWN:
                 self.__possibleMoves.append([poz + Directions.directions[1][j], poz + Directions.directions[1][j] + Directions.directions[1 - capture][2 - j]])
 
+    def __validateMoves(self):
+        if self.__checks == 0:
+            return
+        if self.__checks == 1:
+            index = len(self.__possibleMoves) -1
+            temp = None
+            i = 0
+            while i <= index:
+                if self.__dangerMap[self.__possibleMoves[i][1]] != 2 and \
+                        abs(self.state[self.__possibleMoves[i][0]]) != Pieces.KING:
+                    self.__possibleMoves[i] = self.__possibleMoves[index]
+                    index -= 1
+                    i -= 1
+                i += 1
+            print(len(self.__possibleMoves) - index - 1)
+            self.__possibleMoves = self.__possibleMoves[0:index + 1]
+            return
+        index = len(self.__possibleMoves) - 1
+        temp = None
+        i = 0
+        while i <= index:
+            if abs(self.state[self.__possibleMoves[i][0]]) != Pieces.KING:
+                temp = copy.copy(self.__possibleMoves[i])
+                self.__possibleMoves[i] = self.__possibleMoves[index]
+                self.__possibleMoves[index] = temp
+                index -= 1
+                i -= 1
+            i += 1
+        self.__possibleMoves = self.__possibleMoves[0:index + 1]
+        #TODO: check after moving en passant, but super fuckin rare case, and probably irrelevant
 
-
-    def __addSlideToPossibleMoves(self, poz : int, dir):
-        move = Directions.directions[dir[0]][dir[1]]
-        basePoz = copy.copy(poz)
-        while Inside.inside[poz][dir[0]][dir[1]]:
-            poz += move
-            if self.withMe(poz):
-                return
-            self.__possibleMoves.append([basePoz, poz])
-
-
-    #helper functions
-
-    def __findKings(self):
-        pass
-
-    def inside(self, frm, mv):
-        pass
-
-    def withMe(self, poz):
-        return self.white and self.state[poz] > 0 or not self.white and self.state[poz] < 0
-
-    def withEnemey(self, poz):
-        return self.white and self.state[poz] < 0 or not self.white and self.state[poz] > 0
-
-    #danger map generation
-
+    # ----------------------  DANGER MAP GENERATION ------------------------------------------------------
     def generateDangerMap(self):
         self.__checks = 0
         for i in self.__dangerMap:
@@ -394,10 +373,6 @@ class Board:
                     case Pieces.QUEEN:
                         self.__dangerMapQueen(i)
 
-    def getDangerMap(self):
-        for i in range(0, 8):
-            print(self.__dangerMap[i * 8: (i+1) * 8])
-
     def printMoves(self):
         for i in self.__possibleMoves:
             print(i)
@@ -422,7 +397,6 @@ class Board:
                 self.__dangerMap[poz] = 1
             if self.withEnemey(poz):
                 return
-
 
     def __handleCheck(self, poz, dir):
         self.__checks += 1
@@ -449,7 +423,6 @@ class Board:
         for i in possibleSlides:
             self.__addSlideToPossibleMoves(poz, i)
         self.state[poz] *= 10
-
 
     def __handlePinnedPawn(self, poz, dir):
         if dir[0] == 1:
@@ -480,7 +453,6 @@ class Board:
             if Inside.inside[poz][i[0]][i[1]]:
                 self.__dangerMap[poz + Directions.directions[i[0]][i[1]]] = 1
 
-
     def __dangerMapPawn(self, poz):
         if not self.white:
             l = Moves.WhitePawnCapture
@@ -494,6 +466,24 @@ class Board:
         for i in range(0, 8):
             if KnightMoves.inside[poz][i]:
                 self.__dangerMap[poz + KnightMoves.directions[i]] = 1
+
+    # ------------------------ HELPER FUNCTIONS -----------------------------------------------------
+
+    def getDangerMap(self):
+        for i in range(0, 8):
+            print(self.__dangerMap[i * 8: (i+1) * 8])
+
+    def __findKings(self):
+        pass
+
+    def inside(self, frm, mv):
+        pass
+
+    def withMe(self, poz):
+        return self.white and self.state[poz] > 0 or not self.white and self.state[poz] < 0
+
+    def withEnemey(self, poz):
+        return self.white and self.state[poz] < 0 or not self.white and self.state[poz] > 0
 
 
 
