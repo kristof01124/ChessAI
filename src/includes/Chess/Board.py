@@ -73,8 +73,6 @@ class Board:
     #public
 
     def makeMove(self, mv): #doesn't check for validity of move
-        if mv == [26, 17]:
-            i = 0
         frm = mv[0]
         to = mv[1]
         #check for castles
@@ -374,6 +372,7 @@ class Board:
                         self.__dangerMapQueen(i)
 
     def printMoves(self):
+        print("The number of possible moves:", len(self.__possibleMoves))
         for i in self.__possibleMoves:
             print(i)
 
