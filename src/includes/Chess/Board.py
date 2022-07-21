@@ -29,7 +29,6 @@ class Moves:
     WhitePawn = [[2, 0], [2, 1], [2, 2]]
     WhitePawnAdvance = [2, 1]
 
-
 class Inside:
     inside = [
         [
@@ -64,20 +63,170 @@ class Board:
         self.__possibleMoves = []
         self.__dangerMap = [0 for i in range(0,64)]
         self.state = [0 for i in range(0, 64)]
+        self.__castling = [True, True, True, True]
         self.__castling = [False, False, False, False]
         self.__moveHistory = []
         self.white = True
         self.__checks = 0
+        self.testing = [0, 0, 0, 0, 0, 0, 0]
 
     #public
+    def makeMove(self, mv): #doesn't check for validity of move
+        if mv == [26, 17]:
+            i = 0
+        frm = mv[0]
+        to = mv[1]
+        #check for castles
+        if abs(self.state[frm]) == Pieces.KING and abs(frm - to) == 2:
+            self.state[to] = self.state[frm]
+            self.state[frm] = 0
+            match to:
+                case 1:
+                    self.state[2] = self.state[0]
+                    self.state[0] = 0
+                case 6:
+                    self.state[5] = self.state[7]
+                    self.state[7] = 0
+                case 58:
+                    self.state[59] = self.state[56]
+                    self.state[56] = 0
+                case 62:
+                    self.state[61] = self.state[63]
+                    self.state[63] = 0
+            self.__moveHistory.append([frm, to, 0, self.__castling])
+            return
+        #check en passant
+        if abs(self.state[frm]) == Pieces.PAWN and abs(to - frm) % 8 != 0 and self.state[to] == 0:
+            if frm % 8 > to % 8:
+                capture = frm -1
+            else:
+                capture = to - 1
+            self.__moveHistory.append([frm, to, self.state[capture], self.__castling, True])
+            self.state[to] = self.state[frm]
+            self.state[frm] = 0
+            self.state[capture] = 0
+            return
+        capture = self.state[to]
+        self.state[to] = self.state[frm]
+        self.state[frm] = 0
+        castling = self.__castling
+        if abs(self.state[to]) == Pieces.KING:
+            if self.white:
+                castling[0] = castling[1] = False
+            else:
+                castling[2] = castling[3] = False
+        match to:
+            case 0:
+                castling[0] = False
+            case 7:
+                castling[1] = False
+            case 56:
+                castling[2] = False
+            case 63:
+                castling[3] = False
+        self.__moveHistory.append([frm, to, capture, self.__castling, self.__possibleMoves])
+        self.__castling = castling
 
-    def makeMove(self, move): # return the move object
-        pass
+    def makeAllMoves(self, depth = 0):
+        if len(self.__moveHistory) != depth:
+            print("There is a big problem")
+        self.testing[depth] += 1
+        if depth == 4:
+            return
+        lastState = copy.copy(self.state)
+        self.white = not self.white
+        self.getAllPossibleMoves()
+        pm = copy.copy(self.__possibleMoves)
+        for i in pm:
+            frm = self.state[i[0]]
+            to = self.state[i[1]]
+            self.makeMove(i)
+            self.makeAllMoves(depth + 1)
+            self.reverseMove()
+            if lastState != self.state:
+                print("yikes")
+                self.state = lastState
+                self.makeMove(i)
+                self.reverseMove()
+        self.white = not self.white
 
-    def reverseMove(self, move): # return nothing
-        pass
+    def reverseMove(self):
+        temp = self.__moveHistory[len(self.__moveHistory) - 1]
+        frm = temp[0]
+        to = temp[1]
+        capture = temp[2]
+        castling = temp[3]
+        self.__moveHistory = self.__moveHistory[0:len(self.__moveHistory) - 1]
+        #handle castling
+        if abs(self.state[to]) == Pieces.KING and abs(frm - to) == 2:
+            self.state[frm] = self.state[to]
+            self.state[to] = 0
+            match to:
+                case 1:
+                    self.state[0] = self.state[2]
+                    self.state[2] = 0
+                case 6:
+                    self.state[7] = self.state[5]
+                    self.state[5] = 0
+                case 58:
+                    self.state[56] = self.state[59]
+                    self.state[59] = 0
+                case 62:
+                    self.state[63] = self.state[61]
+                    self.state[61] = 0
+            return
+        #handle en passant
+        if temp[len(temp) - 1] is True:
+            raise "This shouldnt happen"
+            if frm % 8 > to % 8:
+                capture = frm - 1
+            else:
+                capture = frm + 1
+            self.state[frm] = self.state[to]
+            self.state[to] = 0
+            self.state[capture] = - self.state[frm]
+            return
+        self.state[frm] = self.state[to]
+        self.state[to] = capture
+        self.__castling = castling
+
+    def __validateMoves(self):
+        if self.__checks == 0:
+            return
+        if self.__checks == 1:
+            index = len(self.__possibleMoves) -1
+            temp = None
+            i = 0
+            while i <= index:
+                if self.__dangerMap[self.__possibleMoves[i][1]] != 2 and abs(self.state[self.__possibleMoves[i][0]]) != Pieces.KING:
+                    temp = copy.copy(self.__possibleMoves[i])
+                    self.__possibleMoves[i] = self.__possibleMoves[index]
+                    self.__possibleMoves[index] = temp
+                    index -= 1
+                    i -= 1
+                i += 1
+            self.__possibleMoves = self.__possibleMoves[0:index + 1]
+            return
+        index = len(self.__possibleMoves) - 1
+        temp = None
+        i = 0
+        while i <= index:
+            if abs(self.state[self.__possibleMoves[i][0]]) != Pieces.KING:
+                temp = copy.copy(self.__possibleMoves[i])
+                self.__possibleMoves[i] = self.__possibleMoves[index]
+                self.__possibleMoves[index] = temp
+                index -= 1
+                i -= 1
+            i += 1
+        self.__possibleMoves = self.__possibleMoves[0:index + 1]
+        #TODO: checck en passant, but super fuckin rare case
+
+
+
 
     def getAllPossibleMoves(self):
+        self.__possibleMoves.clear()
+        self.__dangerMap = [0 for i in range(0, 64)]
         self.generateDangerMap()
         for i in range(0, 64):
             if self.withMe(i):
@@ -94,7 +243,12 @@ class Board:
                         self.__getPossibleRookMoves(i)
                     case Pieces.PAWN:
                         self.__getPossiblePawnMoves(i)
-        print(len(self.__possibleMoves))
+            if abs(self.state[i]) >= 10:
+                self.state[i] /= 10
+
+        self.__getEnPassantMoves()
+        self.__getCastleMoves()
+        self.__validateMoves()
 
     #private
 
@@ -133,24 +287,67 @@ class Board:
                 self.__possibleMoves.append([poz, poz + Directions.directions[i[0]][i[1]]])
         if Inside.inside[poz][advance[0]][advance[1]] and self.state[poz + Directions.directions[advance[0]][advance[1]]] == 0:
             self.__possibleMoves.append([poz, poz + Directions.directions[advance[0]][advance[1]]])
-            if Inside.inside[poz + Directions.directions[advance[0]][advance[1]]][advance[0]][advance[1]] and \
+            if self.white and poz < 16 or not self.white and poz >= 48 and \
+                    Inside.inside[poz + Directions.directions[advance[0]][advance[1]]][advance[0]][advance[1]] and \
                 self.state[poz + Directions.directions[advance[0]][advance[1]] + Directions.directions[advance[0]][advance[1]]] == 0:
                 self.__possibleMoves.append([poz, poz + Directions.directions[advance[0]][advance[1]] + Directions.directions[advance[0]][advance[1]]])
 
 
 
-    def __getCastleMoves(self, poz):
-        pass
+    def __getCastleMoves(self):
+        found = False
+        if self.white:
+            if self.__castling[0] == True:
+                for i in range(1, 4):
+                    if self.__dangerMap[i] > 0:
+                        found = True
+                if not found:
+                    self.__possibleMoves.append([3, 1])
+            found = False
+            if self.__castling[1] == True:
+                for i in range(3, 7):
+                    if self.__dangerMap[i] > 0:
+                        found = True
+                if not found:
+                    self.__possibleMoves.append([3, 5])
+        else:
+            if self.__castling[2] == True:
+                for i in range(57, 61):
+                    if self.__dangerMap[i] > 0:
+                        found = True
+                if not found:
+                    self.__possibleMoves.append([60, 58])
+            found = False
+            if self.__castling[3] == True:
+                for i in range(60, 63):
+                    if self.__dangerMap[i] > 0:
+                        found = True
+                if not found:
+                    self.__possibleMoves.append([60, 62])
 
-    def __getEnPassantMoves(self, poz):
-        pass
+
+    def __getEnPassantMoves(self):
+        if len(self.__moveHistory) == 0:
+            return
+        if self.white:
+            capture = -1
+        else:
+            capture = 1
+        poz = self.__moveHistory[len(self.__moveHistory) - 1][1]
+        if abs(self.state[poz]) != Pieces.PAWN or abs(poz - self.__moveHistory[len(self.__moveHistory) - 1][0]) == 8:
+            return
+        for j in range(0, 3, 2):
+            if Inside.inside[poz][1][j] and self.withMe(poz + Directions.directions[1][j]) and abs(self.state[poz + Directions.directions[1][j]]) == Pieces.PAWN:
+                self.__possibleMoves.append([poz + Directions.directions[1][j], poz + Directions.directions[1][j] + Directions.directions[1 - capture][2 - j]])
+
+
 
     def __addSlideToPossibleMoves(self, poz : int, dir):
         move = Directions.directions[dir[0]][dir[1]]
         basePoz = copy.copy(poz)
         while Inside.inside[poz][dir[0]][dir[1]]:
             poz += move
-            if self.state[poz] != 0:
+            if self.withMe(poz):
                 return
             self.__possibleMoves.append([basePoz, poz])
 
@@ -184,6 +381,9 @@ class Board:
                         self.__dangerMapKnight(i)
                     case Pieces.PAWN:
                         self.__dangerMapPawn(i)
+            else:
+                if self.state[i] != 0:
+                    self.__dangerMap[i] = 1
         for i in range(0, 64):
             if self.withEnemey(i):
                 match abs(self.state[i]):
@@ -197,6 +397,10 @@ class Board:
     def getDangerMap(self):
         for i in range(0, 8):
             print(self.__dangerMap[i * 8: (i+1) * 8])
+
+    def printMoves(self):
+        for i in self.__possibleMoves:
+            print(i)
 
     def __dangerMapHandleSliding(self, poz, dir):
         move = Directions.directions[dir[0]][dir[1]]
@@ -229,7 +433,7 @@ class Board:
                 return
             self.__dangerMap[poz] = 2
 
-    def __handlePin(self, poz, dir): #this function shouldn't be called to many times, so its fine to be kinda inofficient
+    def __handlePin(self, poz, dir): #this function shouldn't be called too many times, so its fine to be kinda inefficient
         possibleSlides = []
         match abs(self.state[poz]):
             case Pieces.ROOK:
@@ -244,17 +448,20 @@ class Board:
                 self.__handlePinnedPawn(poz, dir) #super rare case
         for i in possibleSlides:
             self.__addSlideToPossibleMoves(poz, i)
-        self.state[poz] += 10
+        self.state[poz] *= 10
 
 
     def __handlePinnedPawn(self, poz, dir):
         if dir[0] == 1:
             return
-        if self.white and dir[0] == 0 or not self.white and dir[0] == 2:
-            dir = [2 - dir[0],2 - dir[1]]
-        if Inside.inside[poz][dir[0]][dir[1]]:
+        if self.white and   dir[0] == 0 or not self.white and dir[0] == 2:
+            dir = [2 - dir[0], 2 - dir[1]]
+        if Inside.inside[poz][dir[0]][dir[1]] and \
+                dir[1] == 1 and self.state[poz + Directions.directions[dir[0]][dir[1]]] == 0 or dir[1] != 1 and self.withEnemey(poz + Directions.directions[dir[0]][dir[1]]):
             self.__possibleMoves.append([poz, poz + Directions.directions[dir[0]][dir[1]]])
-        # TODO: fix this shit
+            if dir[1] == 1 and self.state[poz + Directions.directions[dir[0]][dir[1]] * 2] == 0:
+                self.__possibleMoves.append([poz, poz + Directions.directions[dir[0]][dir[1]] * 2])
+        #TODO: en passant
 
     def __dangerMapBishop(self, poz):
         for i in Moves.Bishop:
