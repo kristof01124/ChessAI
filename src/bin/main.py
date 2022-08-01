@@ -1,5 +1,5 @@
 import src.includes.Chess.Board as Board
-import  src.includes.Chess.Move as Move
+import src.includes.Chess.Move as Move
 import timeit
 import cProfile
 import chess
@@ -29,16 +29,11 @@ test_position = [
 def main():
     board = Board.Board()
     board.state = starting_position
-    board.getAllPossibleMoves()
-    b = chess.Board()
-    b.set_fen("rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 1")
-    b.generate_legal_moves()
-    print(b.legal_moves.count())
-    print(b.legal_moves)
-    board.printMoves()
+    #board.importFen("rnb1kbnr/ppppp1pp/8/3KPpq1/8/7N/PPPP1PPP/RNBQ1B1R")
+    board.importFen("rnb1kbnr/ppppp1pp/8/2K1P1q1/5p2/7N/PPPP1PPP/RNBQ1B1R")
     board.makeAllMoves()
     print(board.testing)
 
 
 
-cProfile.run("main()")
+main()

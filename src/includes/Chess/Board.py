@@ -1,5 +1,7 @@
 import copy
 
+import chess
+
 
 class Pieces:
     PAWN = 1
@@ -62,13 +64,14 @@ class Board:
     def __init__(self):
         self.__possibleMoves = []
         self.__dangerMap = [0 for i in range(0,64)]
+        self.__checkMap = [0 for i in range(0, 64)]
         self.state = [0 for i in range(0, 64)]
         self.__castling = [True, True, True, True]
-        self.__castling = [False, False, False, False]
         self.__moveHistory = []
         self.white = True
         self.__checks = 0
         self.testing = [0, 0, 0, 0, 0, 0, 0]
+        self.__board = chess.Board()
 
     #public
 
@@ -95,11 +98,11 @@ class Board:
             self.__moveHistory.append([frm, to, 0, self.__castling])
             return
         #check en passant
-        if abs(self.state[frm]) == Pieces.PAWN and abs(to - frm) % 8 != 0 and self.state[to] == 0:
+        if len(mv) == 3:
             if frm % 8 > to % 8:
                 capture = frm -1
             else:
-                capture = to - 1
+                capture = frm + 1
             self.__moveHistory.append([frm, to, self.state[capture], self.__castling, True])
             self.state[to] = self.state[frm]
             self.state[frm] = 0
@@ -130,12 +133,18 @@ class Board:
         if len(self.__moveHistory) != depth:
             print("There is a big problem")
         self.testing[depth] += 1
-        if depth == 4:
+        if depth == 5:
             return
         lastState = copy.copy(self.state)
         self.white = not self.white
         self.getAllPossibleMoves()
         pm = copy.copy(self.__possibleMoves)
+        self.__board.set_fen(self.generateFen())
+        self.__board.generate_legal_moves()
+        if self.__board.legal_moves.count() != len(self.__possibleMoves):
+            print(self.generateFen(), self.__board.legal_moves.count(), self.__board.legal_moves, len(self.__possibleMoves), self.__possibleMoves)
+            self.debugPosition()
+        self.getAllPossibleMoves()
         for i in pm:
             frm = self.state[i[0]]
             to = self.state[i[1]]
@@ -143,9 +152,16 @@ class Board:
             self.makeAllMoves(depth + 1)
             self.reverseMove()
             if lastState != self.state:
+                print(i)
                 print("yikes")
+                self.printState()
                 self.state = lastState
+                print("-")
+                self.printState()
+                print("---------------------------")
                 self.makeMove(i)
+                self.printState()
+                print("_---------------END OF SEGMENT------------------_")
                 self.reverseMove()
         self.white = not self.white
 
@@ -192,6 +208,7 @@ class Board:
     def getAllPossibleMoves(self):
         self.__possibleMoves.clear()
         self.__dangerMap = [0 for i in range(0, 64)]
+        self.__checkMap = [0 for i in range(0, 64)]
         self.generateDangerMap() # assume to be good for now
         self.__getEnPassantMoves() # need to be before the for range, beacuse of pins
         for i in range(0, 64):
@@ -246,6 +263,8 @@ class Board:
             if self.withMe(poz):
                 return
             self.__possibleMoves.append([basePoz, poz])
+            if self.withEnemy(poz):
+                return
 
     def __getPossiblePawnMoves(self, poz):
         if self.white:
@@ -257,15 +276,15 @@ class Board:
         #handle captures
         for i in capture:
             move = Directions.directions[i[0]][i[1]]
-            if Inside.inside[poz][i[0]][i[1]] and self.withEnemey(poz + move):
+            if Inside.inside[poz][i[0]][i[1]] and self.withEnemy(poz + move):
                 self.__possibleMoves.append([poz, poz + move])
         #handle advance
         move = Directions.directions[advance[0]][advance[1]]
         if Inside.inside[poz][advance[0]][advance[1]] and self.state[poz + move] == 0:
             self.__possibleMoves.append([poz, poz + move])
             #handle duble advance
-            if Inside.inside[poz + move][advance[0]][advance[1]] and self.state[poz + 2*move] == 0 and \
-                    poz < 16 and self.white or poz >= 48 and not self.white:
+            if Inside.inside[poz + move][advance[0]][advance[1]] and self.state[poz + 2 * move] == 0 and \
+                    ((poz < 16 and self.white) or (poz >= 48 and not self.white)):
                 self.__possibleMoves.append([poz, poz + 2*move])
 
     def __getCastleMoves(self):
@@ -307,27 +326,56 @@ class Board:
         else:
             capture = 1
         poz = self.__moveHistory[len(self.__moveHistory) - 1][1]
-        if abs(self.state[poz]) != Pieces.PAWN or abs(poz - self.__moveHistory[len(self.__moveHistory) - 1][0]) == 8:
+        if abs(self.state[poz]) != Pieces.PAWN or abs(poz - self.__moveHistory[len(self.__moveHistory) - 1][0]) != 16:
             return
         for j in range(0, 3, 2):
             if Inside.inside[poz][1][j] and self.withMe(poz + Directions.directions[1][j]) and abs(self.state[poz + Directions.directions[1][j]]) == Pieces.PAWN:
-                self.__possibleMoves.append([poz + Directions.directions[1][j], poz + Directions.directions[1][j] + Directions.directions[1 - capture][2 - j]])
+                self.__possibleMoves.append([poz + Directions.directions[1][j], poz + Directions.directions[1][j] + Directions.directions[1 - capture][2 - j], True])
+
+    def __handleEnPassantCheck(self, frm, to):
+        if to % 8 > frm % 8:
+            to = frm + 1
+        else:
+            to = copy.copy(frm)
+            frm -= 1
+        left = None
+        right = None
+        for i in range(frm - 1, frm - frm % 8 - 1, -1):
+            if self.state[i] > 0:
+                left = i
+                break
+        for i in range(to + 1, to - to % 8 + 8):
+            if self.state[i] > 0:
+                right = i
+                break
+        if right is None or left is None:
+            return
+        if self.withEnemy(right):
+            temp = copy.copy(right)
+            right = left
+            left = temp
+        if self.withMe(right) and abs(self.state[right]) == Pieces.KING and self.withEnemy(left) and (abs(self.state[left]) == Pieces.ROOK or abs(self.state[left]) == Pieces.QUEEN):
+            self.__possibleMoves[0] = self.__possibleMoves[len(self.__possibleMoves) - 1]
+            self.__possibleMoves = self.__possibleMoves[0:len(self.__possibleMoves) - 1]
+
 
     def __validateMoves(self):
         if self.__checks == 0:
+            if len(self.__possibleMoves[0]) == 3:
+                self.__handleEnPassantCheck(self.__possibleMoves[0][0], self.__possibleMoves[0][1])
             return
         if self.__checks == 1:
             index = len(self.__possibleMoves) -1
             temp = None
             i = 0
             while i <= index:
-                if self.__dangerMap[self.__possibleMoves[i][1]] != 2 and \
-                        abs(self.state[self.__possibleMoves[i][0]]) != Pieces.KING:
+                if self.__checkMap[self.__possibleMoves[i][1]] != 2 and \
+                        abs(self.state[self.__possibleMoves[i][0]]) != Pieces.KING and \
+                        (len(self.__possibleMoves[i]) == 2 or self.__checkMap[self.__possibleMoves[i][0] + (self.__possibleMoves[i][1] % 8 - self.__possibleMoves[i][0] % 8)] != 2) :
                     self.__possibleMoves[i] = self.__possibleMoves[index]
                     index -= 1
                     i -= 1
                 i += 1
-            print(len(self.__possibleMoves) - index - 1)
             self.__possibleMoves = self.__possibleMoves[0:index + 1]
             return
         index = len(self.__possibleMoves) - 1
@@ -342,7 +390,7 @@ class Board:
                 i -= 1
             i += 1
         self.__possibleMoves = self.__possibleMoves[0:index + 1]
-        #TODO: check after moving en passant, but super fuckin rare case, and probably irrelevant
+
 
     # ----------------------  DANGER MAP GENERATION ------------------------------------------------------
     def generateDangerMap(self):
@@ -350,7 +398,7 @@ class Board:
         for i in self.__dangerMap:
             i = 0
         for i in range(0, 64):
-            if self.withEnemey(i):
+            if self.withEnemy(i):
                 match abs(self.state[i]):
                     case Pieces.KING:
                         self.__dangerMapKing(i)
@@ -362,7 +410,7 @@ class Board:
                 if self.state[i] != 0:
                     self.__dangerMap[i] = 1
         for i in range(0, 64):
-            if self.withEnemey(i):
+            if self.withEnemy(i):
                 match abs(self.state[i]):
                     case Pieces.ROOK:
                         self.__dangerMapRook(i)
@@ -394,17 +442,25 @@ class Board:
                 continue
             if self.__dangerMap[poz] == 0:
                 self.__dangerMap[poz] = 1
-            if self.withEnemey(poz):
+            if self.withEnemy(poz):
                 return
 
     def __handleCheck(self, poz, dir):
         self.__checks += 1
+        basepoz = poz
         move = Directions.directions[dir[0]][dir[1]]
         while Inside.inside[poz][dir[0]][dir[1]]:
             poz += move
+            self.__checkMap[poz] = 2
+            if self.state[poz] != 0:
+                break
+        move = Directions.directions[2 - dir[0]][2 - dir[1]]
+        poz = basepoz
+        while Inside.inside[poz][2 - dir[0]][2 - dir[1]]:
+            poz += move
+            self.__dangerMap[poz] = 1
             if self.state[poz] != 0:
                 return
-            self.__dangerMap[poz] = 2
 
     def __handlePin(self, poz, dir): #this function shouldn't be called too many times, so its fine to be kinda inefficient
         possibleSlides = []
@@ -429,9 +485,9 @@ class Board:
         if self.white and   dir[0] == 0 or not self.white and dir[0] == 2:
             dir = [2 - dir[0], 2 - dir[1]]
         if Inside.inside[poz][dir[0]][dir[1]] and \
-                dir[1] == 1 and self.state[poz + Directions.directions[dir[0]][dir[1]]] == 0 or dir[1] != 1 and self.withEnemey(poz + Directions.directions[dir[0]][dir[1]]):
+                dir[1] == 1 and self.state[poz + Directions.directions[dir[0]][dir[1]]] == 0 or dir[1] != 1 and self.withEnemy(poz + Directions.directions[dir[0]][dir[1]]):
             self.__possibleMoves.append([poz, poz + Directions.directions[dir[0]][dir[1]]])
-            if dir[1] == 1 and self.state[poz + Directions.directions[dir[0]][dir[1]] * 2] == 0:
+            if dir[1] == 1 and self.state[poz + Directions.directions[dir[0]][dir[1]] * 2] == 0 and ((poz < 16 and self.white) or (poz >= 48 and not self.white)):
                 self.__possibleMoves.append([poz, poz + Directions.directions[dir[0]][dir[1]] * 2])
         #TODO: en passant
 
@@ -460,13 +516,154 @@ class Board:
         for j in l:
             if Inside.inside[poz][j[0]][j[1]]:
                 self.__dangerMap[poz + Directions.directions[j[0]][j[1]]] = 1
+                if abs(self.state[poz + Directions.directions[j[0]][j[1]]]) == Pieces.KING and self.withMe(poz + Directions.directions[j[0]][j[1]]):
+                    self.__checks += 1
+                    self.__checkMap[poz] = 2
 
     def __dangerMapKnight(self, poz):
         for i in range(0, 8):
             if KnightMoves.inside[poz][i]:
                 self.__dangerMap[poz + KnightMoves.directions[i]] = 1
+                if abs(self.state[poz + KnightMoves.directions[i]]) == Pieces.KING and self.withMe(poz + KnightMoves.directions[i]):
+                    self.__checks += 1
+                    self.__checkMap[poz] = 2
 
     # ------------------------ HELPER FUNCTIONS -----------------------------------------------------
+    def debugPosition(self):
+        print("DANGER MAP_______________________________")
+        for i in range(0,64,8):
+            print(self.__dangerMap[i:i+8])
+        print("CHECK MAP_______________________________")
+        for i in range(0, 64, 8):
+            print(self.__checkMap[i:i + 8])
+        print("STATE_______________________________")
+        for i in range(0,64,8):
+            print(self.state[i:i+8])
+        print("_____________________________________________")
+        print(len(self.__possibleMoves))
+        print(self.__possibleMoves)
+
+
+    def printState(self):
+        for i in range(0, 64, 8):
+            print(self.state[i:i + 8])
+
+    def importFen(self, fen : str):
+        index = 63
+        self.state = [0 for i in range(0, 64)]
+        for i in fen:
+            piece = 0
+            change = 1
+            match i.lower():
+                case 'p':
+                    piece = Pieces.PAWN
+                case 'r':
+                    piece = Pieces.ROOK
+                case 'b':
+                    piece = Pieces.BISHOP
+                case 'n':
+                    piece = Pieces.KNIGHT
+                case 'k':
+                    piece = Pieces.KING
+                case 'q':
+                    piece = Pieces.QUEEN
+                case '/':
+                    index -= index % 8
+                    index -= 1
+                    continue
+                case _:
+                    change = ord(i) - ord('0')
+            if i.lower() == i:
+                piece *= -1
+            self.state[index] = piece
+            index -=  change
+            if index % 8 == 7:
+                index += 1
+
+    def generateFen(self):
+        output = ""
+        index = 0
+        gap = 0
+        for i in reversed(self.state):
+            car = None
+            match abs(i):
+                case Pieces.PAWN:
+                    car = 'p'
+                case Pieces.ROOK:
+                    car = 'r'
+                case Pieces.KNIGHT:
+                    car = 'n'
+                case Pieces.BISHOP:
+                    car = 'b'
+                case Pieces.KING:
+                    car = 'k'
+                case Pieces.QUEEN:
+                    car = 'q'
+                case 0:
+                    gap += 1
+            if i > 0:
+                car = car.upper()
+            if car is not None:
+                if gap > 0:
+                    output += str(gap)
+                gap = 0
+                output += car
+            index += 1
+            if index % 8 == 0:
+                if gap > 0:
+                    output += str(gap)
+                    gap = 0
+                output += '/'
+        output = output[0:len(output) -1]
+        output += " "
+        if self.white:
+            output += "w "
+        else:
+            output += "b "
+        if self.__castling[1]:
+            output += "K"
+        if self.__castling[0]:
+            output += "Q"
+        if self.__castling[2]:
+            output += "k"
+        if self.__castling[3]:
+            output += "q"
+        if output[len(output) - 1] == ' ':
+            output += "-"
+        output += " "
+        if len(self.__moveHistory) > 0:
+            temp = self.__moveHistory[len(self.__moveHistory) - 1]
+            if abs(temp[0] - temp[1]) == 16 and abs(self.state[temp[1]]) == Pieces.PAWN:
+                output += self.generateSquareName((temp[0] + temp[1]) / 2)
+            else:
+                output += "-"
+        else:
+            output += "-"
+        output += " 0 2"
+        return output
+
+    def generateSquareName(self, poz):
+        match int(7 - poz%8):
+            case 0:
+                out = "a"
+            case 1:
+                out = "b"
+            case 2:
+                out = "c"
+            case 3:
+                out = "d"
+            case 4:
+                out = "e"
+            case 5:
+                out = "f"
+            case 6:
+                out = "g"
+            case 7:
+                out = "h"
+        out += str(int(poz / 8) + 1)
+        return out
+
+
 
     def getDangerMap(self):
         for i in range(0, 8):
@@ -481,7 +678,7 @@ class Board:
     def withMe(self, poz):
         return self.white and self.state[poz] > 0 or not self.white and self.state[poz] < 0
 
-    def withEnemey(self, poz):
+    def withEnemy(self, poz):
         return self.white and self.state[poz] < 0 or not self.white and self.state[poz] > 0
 
 
