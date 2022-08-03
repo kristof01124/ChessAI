@@ -29,11 +29,10 @@ test_position = [
 def main():
     board = Board.Board()
     board.state = starting_position
-    #board.importFen("rnb1kbnr/ppppp1pp/8/3KPpq1/8/7N/PPPP1PPP/RNBQ1B1R")
-    board.importFen("rnb1kbnr/ppppp1pp/8/2K1P1q1/5p2/7N/PPPP1PPP/RNBQ1B1R")
-    board.makeAllMoves()
-    print(board.testing)
+    board.importFen("rnb1kbnr/ppppp1pp/8/3KPpq1/8/7N/PPPP1PPP/RNBQ1B1R")
+    #board.importFen("rnb1kbnr/pp1qPppp/8/8/8/8/PPP1PPPP/RNBQKBNR")
+    board.makeAllMoves(0)
+    board.debugPosition()
 
 
-
-main()
+cProfile.run("main()")
