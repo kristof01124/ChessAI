@@ -10,6 +10,13 @@ class Pieces:
     ROOK = 4
     QUEEN = 5
     KING = 6
+    class Black:
+        PAWN = -1
+        KNIGHT = -2
+        BISHOP = -3
+        ROOK = -4
+        QUEEN = -5
+        KING = -6
 
 
 class Directions:
@@ -70,15 +77,18 @@ class Board:
         self.__moveHistory = []
         self.white = True
         self.__checks = 0
-        self.testing = [0, 0, 0, 0, 0, 0, 0]
+        self.testing = [0, 0, 0, 0, 0, 0, 0,0,0,0,0]
         self.__board = chess.Board()
         self.__enPassantSquare = -1
 
     #public
 
     def makeMove(self, mv): #doesn't check for validity of move
+        self.white = not self.white
         frm = mv[0]
         to = mv[1]
+        ec = copy.copy(self.__enPassantSquare)
+        self.__enPassantSquare = -1
         #check for castles
         if abs(self.state[frm]) == Pieces.KING and abs(frm - to) == 2:
             self.state[to] = self.state[frm]
@@ -101,15 +111,15 @@ class Board:
                     self.state[60] = self.state[63]
                     self.state[63] = 0
                     self.__castling[2] = self.__castling[3] = False
-            self.__moveHistory.append([frm, to, 0, cp, copy.copy(self.__enPassantSquare), copy.copy(self.__possibleMoves)])
+            self.__moveHistory.append([frm, to, 0, cp, ec])
             return
         #check en passant
-        if len(mv) == 3:
+        if abs(self.state[frm]) == Pieces.PAWN and to == ec:
             if frm % 8 > to % 8:
                 capture = frm -1
             else:
                 capture = frm + 1
-            self.__moveHistory.append([frm, to, self.state[capture], copy.copy(self.__castling), copy.copy(self.__enPassantSquare), copy.copy(self.__possibleMoves)], True)
+            self.__moveHistory.append([frm, to, self.state[capture], copy.copy(self.__castling), ec, True])
             self.state[to] = self.state[frm]
             self.state[frm] = 0
             self.state[capture] = 0
@@ -119,7 +129,7 @@ class Board:
         self.state[frm] = 0
         cp = copy.copy(self.__castling)
         if abs(self.state[to]) == Pieces.KING:
-            if self.white:
+            if not self.white:
                 self.__castling[0] = self.__castling[1] = False
             else:
                 self.__castling[2] = self.__castling[3] = False
@@ -141,7 +151,7 @@ class Board:
                 self.__castling[2] = False
             case 63:
                 self.__castling[3] = False
-        self.__moveHistory.append([frm, to, capture, cp, copy.copy(self.__enPassantSquare), copy.copy(self.__possibleMoves)])
+        self.__moveHistory.append([frm, to, capture, cp, ec])
         if abs(self.state[to]) == Pieces.PAWN and abs(to - frm) == 16:
             self.__enPassantSquare = (to + frm) / 2
         else:
@@ -154,18 +164,12 @@ class Board:
 
     def makeAllMoves(self, depth = 0):
         self.testing[depth] += 1
-        if depth == 5:
+        if self.testing[depth] % 1000000 == 0:
+            print(depth, self.testing[depth])
+        if depth == 6:
             return
-        lastState = copy.copy(self.state)
-        self.white = not self.white
         self.getAllPossibleMoves()
         pm = copy.copy(self.__possibleMoves)
-        self.__board.set_fen(self.generateFen())
-        self.__board.generate_legal_moves()
-        if self.__board.legal_moves.count() != len(self.__possibleMoves):
-            print("Wrong number of legal moves")
-            print(self.generateFen(), self.__board.legal_moves.count(), self.__board.legal_moves, len(self.__possibleMoves), self.__possibleMoves)
-            self.debugPosition()
         self.getAllPossibleMoves()
         for i in pm:
             frm = self.state[i[0]]
@@ -173,10 +177,6 @@ class Board:
             self.makeMove(i)
             self.makeAllMoves(depth + 1)
             self.reverseMove()
-            if lastState != self.state:
-                print("Last state doesn't match reversed state!")
-                self.debugPosition()
-        self.white = not self.white
 
     def reverseMove(self):
         temp = self.__moveHistory[len(self.__moveHistory) - 1]
@@ -185,8 +185,10 @@ class Board:
         capture = temp[2]
         castling = temp[3]
         enPassantSquare = temp[4]
-        pm = temp[5]
+        self.white = not self.white
         self.__moveHistory = self.__moveHistory[0:len(self.__moveHistory) - 1]
+        self.__castling = castling
+        self.__enPassantSquare = enPassantSquare
         #handle castling
         if abs(self.state[to]) == Pieces.KING and abs(frm - to) == 2:
             self.state[frm] = self.state[to]
@@ -218,9 +220,6 @@ class Board:
             return
         self.state[frm] = self.state[to]
         self.state[to] = capture
-        self.__castling = castling
-        self.__possibleMoves = pm
-        self.__enPassantSquare = enPassantSquare
         if temp[len(temp) - 1] is False:
             self.state[frm] = self.state[frm] / Pieces.QUEEN
 
@@ -252,6 +251,7 @@ class Board:
         self.__validateMoves()
         #these don't need validation
         self.__getCastleMoves()
+
     #private
 
     def __getPossibleKingMoves(self, poz):
@@ -314,10 +314,11 @@ class Board:
         if dir > 0:
             to += 7
         for i in range(frm + dir, to, dir):
-            if self.__dangerMap[i] > 0 or self.state[i] != 0:
+            if self.state[i] != 0:
                 found = True
-        if self.__dangerMap[frm] > 0:
-            found = True
+        for i in range(frm + dir, frm + 3 * dir, dir):
+            if self.__dangerMap != 0:
+                found = True
         if not found:
             self.__possibleMoves.append([frm, frm + 2 * dir])
 
@@ -364,6 +365,8 @@ class Board:
     def __validateMoves(self):
         if len(self.__possibleMoves[0]) == 3:
             self.__handleEnPassantCheck(self.__possibleMoves[0][0], self.__possibleMoves[0][1])
+        if self.__checks == 0:
+            return
         if self.__checks == 1:
             index = len(self.__possibleMoves) -1
             temp = None
@@ -395,8 +398,6 @@ class Board:
     # ----------------------  DANGER MAP GENERATION ------------------------------------------------------
     def generateDangerMap(self):
         self.__checks = 0
-        for i in self.__dangerMap:
-            i = 0
         for i in range(0, 64):
             if self.withEnemy(i):
                 match abs(self.state[i]):
@@ -530,6 +531,7 @@ class Board:
 
     # ------------------------ HELPER FUNCTIONS -----------------------------------------------------
     def debugPosition(self):
+        print(self.generateFen())
         print("DANGER MAP_______________________________")
         for i in range(0,64,8):
             print(self.__dangerMap[i:i+8])
@@ -540,10 +542,11 @@ class Board:
         for i in range(0,64,8):
             print(self.state[i:i+8])
         print("_____________________________________________")
-        print(len(self.__possibleMoves))
-        print(self.__possibleMoves)
         for i in self.__moveHistory:
             print(i)
+        print("Number of checks:", self.__checks)
+        print("En passant squeare: ", self.__enPassantSquare)
+        print("END OF DEBUGGING")
 
     def printState(self):
         for i in range(0, 64, 8):
@@ -552,9 +555,11 @@ class Board:
     def importFen(self, fen : str):
         index = 63
         self.state = [0 for i in range(0, 64)]
+        poz = 0
         for i in fen:
             piece = 0
             change = 1
+            poz += 1
             match i.lower():
                 case 'p':
                     piece = Pieces.PAWN
@@ -572,6 +577,30 @@ class Board:
                     index -= index % 8
                     index -= 1
                     continue
+                case ' ':
+                    if fen[poz] == 'b':
+                        self.white = False
+                    else:
+                        self.white = True
+                    poz += 2
+                    self.__castling = [False, False, False, False]
+                    while fen[poz] != ' ':
+                        match fen[poz]:
+                            case 'K':
+                                self.__castling[0] = True
+                            case 'Q':
+                                self.__castling[1] = True
+                            case 'k':
+                                self.__castling[2] = True
+                            case 'q':
+                                self.__castling[3] = True
+                        poz += 1
+                    poz += 1
+                    if fen[poz] == '-':
+                        self.__enPassantSquare = -1
+                    else:
+                        self.__enPassantSquare = (ord(fen[poz]) - ord('a') + 1) + (int(fen[poz+1]) - 1) * 8
+                    break
                 case _:
                     change = ord(i) - ord('0')
             if i.lower() == i:
@@ -632,12 +661,8 @@ class Board:
         if output[len(output) - 1] == ' ':
             output += "-"
         output += " "
-        if len(self.__moveHistory) > 0:
-            temp = self.__moveHistory[len(self.__moveHistory) - 1]
-            if abs(temp[0] - temp[1]) == 16 and abs(self.state[temp[1]]) == Pieces.PAWN:
-                output += self.generateSquareName((temp[0] + temp[1]) / 2)
-            else:
-                output += "-"
+        if self.__enPassantSquare > -1:
+            output += self.generateSquareName(self.__enPassantSquare)
         else:
             output += "-"
         output += " 0 2"
@@ -679,3 +704,113 @@ class Board:
 
     def withEnemy(self, poz):
         return self.white and self.state[poz] < 0 or not self.white and self.state[poz] > 0
+
+    #debugging functions
+
+    def actualNumberOfpossibleMoves(self):
+        num = len(self.__possibleMoves)
+        for i in self.__possibleMoves:
+            if abs(self.state[i[0]]) == Pieces.PAWN and (i[1] < 8 or i[1] >= 56):
+                num += 3
+        return num
+
+    def checkPosition(self):
+        n = self.actualNumberOfpossibleMoves()
+        self.__board.set_fen(self.generateFen())
+        self.__board.generate_legal_moves()
+        if n == self.__board.legal_moves.count():
+            return
+        print("Wrong number of possible moves!")
+        print("My program sees: ", n, "(", len(self.__possibleMoves),")")
+        print(self.__possibleMoves)
+        print("THere actual  are: ", self.__board.legal_moves.count())
+        print(self.__board.legal_moves)
+        self.debugPosition()
+
+    #getters
+
+    def possibleMoves(self):
+        return self.__possibleMoves
+
+    #evaluation functions
+
+    def reverse(self):
+        for i in range(0,32):
+            self.state[i], self.state[63-i] = self.state[63-i], self.state[i]
+            self.state[i] *= -1
+            self.state[63 - i] *= -1
+
+    def testEvaluation(self):
+        out = 0
+        for i in self.state:
+            match abs(i):
+                case Pieces.PAWN:
+                    val = 1
+                case Pieces.BISHOP:
+                    val = 3.5
+                case Pieces.ROOK:
+                    val = 5
+                case Pieces.QUEEN:
+                    val = 8
+                case Pieces.KNIGHT:
+                    val = 3
+                case _:
+                    val = 0
+            if i < 0:
+                val *= -1
+            out += val
+        return out
+
+    def convertBoard(self):
+        out = []
+        index = 0
+        for i in self.state:
+            temp = [0 for i in range(0,12)]
+            poz = -1
+            match i:
+                case Pieces.PAWN:
+                    poz = 10
+                case Pieces.ROOK:
+                    poz = 0
+                case Pieces.KNIGHT:
+                    poz = 1
+                case Pieces.BISHOP:
+                    poz = 2
+                case Pieces.KING:
+                    poz = 3
+                case Pieces.QUEEN:
+                    poz = 4
+                case Pieces.Black.PAWN:
+                    poz = 10
+                case Pieces.Black.ROOK:
+                    poz = 5
+                case Pieces.Black.KNIGHT:
+                    poz = 6
+                case Pieces.Black.BISHOP:
+                    poz = 7
+                case Pieces.Black.KING:
+                    poz = 8
+                case Pieces.Black.QUEEN:
+                    poz = 9
+            if poz > -1:
+                temp[poz] = 1
+            index += 1
+            if index <= 8 or index >= 57:
+                for j in temp[0:10]:
+                    out.append(j)
+                continue
+            for j in temp:
+                out.append(j)
+        return out
+
+    def evalute(self):
+        if not self.white:
+            self.reverse()
+        self.getAllPossibleMoves()
+        #Metrics:
+        NumberOfPossibleMoves = len(self.__possibleMoves)
+        EnemyHalfControl = 0
+        SumOfFriendlyPieces = 0
+        SumOfEnemyPieces = 0
+
+
