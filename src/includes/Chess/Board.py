@@ -2,6 +2,14 @@ import copy
 
 import chess
 
+#used for evaluation
+class HEATMAP:
+    KING = [1 for i in range(0, 64)]
+    QUEEN = [1 for i in range(0, 64)]
+    KNGIHT = [1 for i in range(0, 64)]
+    ROOK = [1 for i in range(0, 64)]
+    PAWN = [1 for i in range(0, 64)]
+    BISHOP = [1 for i in range(0, 64)]
 
 class Pieces:
     PAWN = 1
@@ -808,9 +816,12 @@ class Board:
             self.reverse()
         self.getAllPossibleMoves()
         #Metrics:
-        NumberOfPossibleMoves = len(self.__possibleMoves)
-        EnemyHalfControl = 0
-        SumOfFriendlyPieces = 0
-        SumOfEnemyPieces = 0
+        #add up white pieces with heatmap
+        #add up black pieces with heatmap
+        #this part includes piece activity, piece total value, and king safety
+        #the heatmap should be weighed less and less in the endgame
+        #number of moves
+        #number of enemy squares controlled
+
 
 

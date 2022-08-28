@@ -22,6 +22,7 @@ class Tree:
         if depth == 0:
             return self.evaluate(self.__board)
         self.__board.getAllPossibleMoves()
+        #TODO: check for checkmate and draw
         for i in copy.copy(self.__board.possibleMoves()):
             self.__board.makeMove(i)
             val = self.traverse(depth - 1, copy.copy(alpha), copy.copy(beta))
